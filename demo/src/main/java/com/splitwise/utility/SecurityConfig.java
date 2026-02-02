@@ -16,85 +16,65 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-// import com.splitwise.service.MyUserDetailsService;
 import com.splitwise.service.UserService;
 
-import jakarta.servlet.Filter;
 import jakarta.servlet.http.HttpServletResponse;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
-	@Autowired
-	private UserService userService;
     @Autowired
-    // private Filter jwtFilter;
+    private UserService userService;
 
+    @Autowired
     private JWTFilter jwtFilter;
 
-    
-	
-	
-//    @Bean
-//    UserDetailsService userDetailsService() {
-//    	UserDetails user1 = User
-////    			.UserBuilder userBuilder = User.withUsername("user")
-////    			.withDefaultPasswordEncoder()
-//    			.withUsername("user123")
-//                .password("password")
-//                .roles("USER")
-//                .build();
-//        return new InMemoryUserDetailsManager(user1);
-//    }
-
     @Bean
-    PasswordEncoder passwordEncoder() {
+    public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder(12);
     }
-    
-//    @Bean
-//    public AuthenticationManager authManager(HttpSecurity http, PasswordEncoder passwordEncoder, UserService userDetailsService)
-//            throws Exception {
-//        return http.getSharedObject(AuthenticationManagerBuilder.class)
-//                .userDetailsService(userDetailsService())
-//                .passwordEncoder(passwordEncoder)
-//                .and()
-//                .build();
-//    }
-    
+
     @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
+    public AuthenticationManager authenticationManager(
+            AuthenticationConfiguration authenticationConfiguration) throws Exception {
         return authenticationConfiguration.getAuthenticationManager();
     }
-    
+
+    @Bean
+    public AuthenticationProvider authenticationProvider() {
+        DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
+        provider.setUserDetailsService(userService);
+        provider.setPasswordEncoder(passwordEncoder());
+        return provider;
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-            .csrf().disable()
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/login", "/register","/balance","/forgot-password/{email}","/reset-password").permitAll()
-                .anyRequest().authenticated() // 🔐 All other routes require valid token
-            ).addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
-            .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS) 
-            .and()
-            .exceptionHandling().authenticationEntryPoint((req, res, ex) ->
-                res.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized")
-            );
 
-        // http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+        http
+            .csrf(csrf -> csrf.disable())
+            .sessionManagement(session ->
+                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            )
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers(
+                        "/login",
+                        "/register",
+                        "/forgot-password/**",
+                        "/reset-password"
+                ).permitAll()
+                .requestMatchers(HttpMethod.POST, "/groups").permitAll()
+                .anyRequest().authenticated()
+            )
+            .exceptionHandling(ex -> ex
+                .authenticationEntryPoint((req, res, excep) ->
+                    res.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized")
+                )
+            )
+            .authenticationProvider(authenticationProvider())
+            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
-    
-   @Bean
-public AuthenticationProvider authenticationProvider() {
-    DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
-    provider.setPasswordEncoder(new BCryptPasswordEncoder(12));
-    provider.setUserDetailsService(userService); // ✅ Correct method name
-    return provider;
 }
-
-}
-
