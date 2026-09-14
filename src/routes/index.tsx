@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { useStore } from '@tanstack/react-store';
 import { store, storeActions } from '../store';
 import { Group } from '../domain/types';
+import GroupDetail from './group.$id';
 
 const BalanceSummary = ({ totals }: { totals: { paid: number, owed: number, net: number } }) => (
   <div style={{
@@ -158,12 +159,13 @@ const Home = () => {
   );
 };
 
+
 export const AppRoutes = () => {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Home />} />
-        <Route path="/group/:groupId" element={<div>Group Details (TBD)</div>} />
+        <Route path="/group/:groupId" element={<GroupDetail />} />
       </Routes>
     </BrowserRouter>
   );
