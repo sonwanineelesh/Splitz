@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useStore } from '@tanstack/react-store';
 import { store, repo } from '../store';
 import { Expense, Split } from '../domain/types';
-import { calculateSplits } from '../services/split-logic';
+import { calculateSplits, SplitStrategy } from '../services/split-logic';
 
 const AddExpense = () => {
   const { groupId } = useParams<{ groupId: string }>();
@@ -45,7 +45,7 @@ const AddExpense = () => {
       return;
     }
 
-    const numericAmount = parseInt(amount, 10);
+    const numericAmount = Math.round(parseFloat(amount) * 100);
     if (isNaN(numericAmount) || numericAmount <= 0) {
       setError('Please enter a valid amount');
       return;
@@ -62,7 +62,7 @@ const AddExpense = () => {
         // Settle up: Payer pays, Recipient gets everything
         finalSplits = [{ memberId: settleUpToId, amount: numericAmount }];
       } else {
-        const strategy: any = {
+        const strategy: SplitStrategy = {
           type: splitMode,
           ...(splitMode === 'exact' && { amounts: splitValues }),
           ...(splitMode === 'percentage' && { percentages: splitValues }),
@@ -94,8 +94,8 @@ const AddExpense = () => {
 
       await repo.saveExpense(expense, splits);
       navigate(`/group/${groupId}`);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
       setIsSaving(false);
     }
@@ -109,13 +109,13 @@ const AddExpense = () => {
   const currentSplits = useMemo(() => {
     if (isSettleUp) return [];
     try {
-      const strategy: any = {
+      const strategy: SplitStrategy = {
         type: splitMode,
         ...(splitMode === 'exact' && { amounts: splitValues }),
         ...(splitMode === 'percentage' && { percentages: splitValues }),
         ...(splitMode === 'shares' && { shares: splitValues }),
       };
-      return calculateSplits(parseInt(amount, 10) || 0, members.map(m => m.id), strategy);
+      return calculateSplits(Math.round(parseFloat(amount) * 100) || 0, members.map(m => m.id), strategy);
     } catch (e) {
       return null; // Validation error handled by catch in calculateSplits
     }
@@ -230,7 +230,7 @@ const AddExpense = () => {
               <label className="text-sm font-medium text-gray-700">Split Mode</label>
               <select
                 value={splitMode}
-                onChange={(e) => setSplitMode(e.target.value as any)}
+                onChange={(e) => setSplitMode(e.target.value as 'equal' | 'exact' | 'percentage' | 'shares')}
                 className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               >
                 <option value="equal">Equal</option>
