@@ -13,6 +13,8 @@ const AddExpense = () => {
   const state = useStore(store);
   const group = state.currentGroup;
   const members = state.members;
+  const isPro = state.isPro;
+  const [expenses, setExpenses] = useState<Expense[]>([]);
 
   const [isSettleUp, setIsSettleUp] = useState(false);
   const [payerId, setPayerId] = useState('');
@@ -39,7 +41,15 @@ const AddExpense = () => {
     if (group) {
       setCurrency(group.homeCurrency);
     }
-  }, [members, isSettleUp, group]);
+
+    const loadExpenses = async () => {
+      if (groupId) {
+        const groupExpenses = await repo.getExpenses(groupId);
+        setExpenses(groupExpenses);
+      }
+    };
+    loadExpenses();
+  }, [members, isSettleUp, group, groupId]);
 
   useEffect(() => {
     const updateRate = async () => {
@@ -226,6 +236,32 @@ const AddExpense = () => {
     return (
       <div className="flex items-center justify-center h-screen text-center p-4">
         <p className="text-gray-600">No members found in this group. Please add members first.</p>
+      </div>
+    );
+  }
+
+  if (expenses.length >= 5 && !isPro && !isSettleUp) {
+    return (
+      <div className="max-w-2xl mx-auto p-4 md:p-8 text-center">
+        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-12 space-y-6">
+          <div className="text-5xl mb-4">🚀</div>
+          <h2 className="text-2xl font-bold text-gray-800">Expense Limit Reached</h2>
+          <p className="text-gray-600">
+            You've reached the limit of 5 expenses for free groups. Upgrade to Pro for unlimited expenses and advanced features.
+          </p>
+          <button
+            onClick={() => navigate('/pro')}
+            className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 transition-all"
+          >
+            Upgrade to Pro
+          </button>
+          <button
+            onClick={() => navigate(-1)}
+            className="block w-full text-sm text-gray-500 hover:text-gray-700 mt-4"
+          >
+            Go Back
+          </button>
+        </div>
       </div>
     );
   }

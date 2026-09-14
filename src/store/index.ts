@@ -7,12 +7,14 @@ export interface StoreState {
   groups: Group[];
   currentGroup: Group | null;
   members: Member[];
+  isPro: boolean;
 }
 
 const initialState: StoreState = {
   groups: [],
   currentGroup: null,
   members: [],
+  isPro: false,
 };
 
 // Singleton repository
@@ -117,6 +119,13 @@ export const storeActions = {
       ...state,
       currentGroup: null,
       members: [],
+    }));
+  },
+
+  setProStatus(isPro: boolean) {
+    store.setState((state) => ({
+      ...state,
+      isPro,
     }));
   },
 };

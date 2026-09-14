@@ -117,6 +117,7 @@ const GroupDetail = () => {
   const state = useStore(store);
   const group = state.currentGroup;
   const members = state.members;
+  const isPro = state.isPro;
 
   useEffect(() => {
     if (groupId) {
@@ -189,6 +190,21 @@ const GroupDetail = () => {
             >
               Export CSV
             </button>
+            {expenses.length >= 5 && !isPro ? (
+              <button
+                onClick={() => navigate('/pro')}
+                className="text-xs bg-yellow-100 hover:bg-yellow-200 text-yellow-700 px-2 py-1 rounded border border-yellow-300 transition-colors font-bold"
+              >
+                Upgrade to Pro
+              </button>
+            ) : (
+              <button
+                onClick={() => navigate(`/group/${groupId}/add`)}
+                className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded font-bold transition-colors"
+              >
+                + Add Expense
+              </button>
+            )}
           </div>
         </div>
         <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-semibold">
