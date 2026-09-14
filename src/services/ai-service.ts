@@ -19,10 +19,13 @@ export const scanReceipt = createServerFn('POST', async ({ data }: { data: { ima
   const prompt = `
     Analyze this receipt image and return a strictly structured JSON object.
     The object must contain the following fields:
-    - merchant: The name of the store or business.
-    - total: The total amount of the receipt as a float (e.g., 12.34).
-    - currency: The ISO 4217 currency code (e.g., USD, EUR).
-    - date: The date of the transaction in YYYY-MM-DD format.
+    - merchant: The name of the store or business. If unknown or missing, use "Unknown Merchant".
+    - total: The total amount of the receipt as a float (e.g., 12.34). If missing, return null.
+    - currency: The ISO 4217 currency code (e.g., USD, EUR). If missing, return null.
+    - date: The date of the transaction in YYYY-MM-DD format. If missing, return null.
+
+    If the image is not a receipt or is completely unreadable, return exactly:
+    { "error": "unreadable_receipt" }
 
     Return ONLY the JSON object. Do not include markdown formatting, explanations, or any other text.
   `;
@@ -53,8 +56,39 @@ export const scanReceipt = createServerFn('POST', async ({ data }: { data: { ima
     try {
       // Remove markdown code blocks if present
       const cleanContent = content.replace(/```json\n?|\n?```/g, '').trim();
-      return JSON.parse(cleanContent) as ScanReceiptResult;
+      const parsed = JSON.parse(cleanContent);
+
+      if (parsed.error === 'unreadable_receipt') {
+        throw new Error('The image provided does not appear to be a readable receipt.');
+      }
+
+      if (typeof parsed !== 'object' || parsed === null) {
+        throw new Error('AI returned an invalid response format.');
+      }
+
+      const { merchant, total, currency, date } = parsed;
+
+      if (typeof merchant !== 'string') {
+        throw new Error('AI response missing merchant name.');
+      }
+      if (total !== null && typeof total !== 'number') {
+        throw new Error('AI response total must be a number or null.');
+      }
+      if (currency !== null && typeof currency !== 'string') {
+        throw new Error('AI response currency must be a string or null.');
+      }
+      if (date !== null && typeof date !== 'string') {
+        throw new Error('AI response date must be a string or null.');
+      }
+
+      return {
+        merchant,
+        total: total ?? 0,
+        currency: currency ?? 'USD',
+        date: date ?? new Date().toISOString().split('T')[0],
+      };
     } catch (e) {
+      if (e instanceof Error) throw e;
       throw new Error('Failed to parse AI response as JSON');
     }
   } catch (error) {

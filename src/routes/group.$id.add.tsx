@@ -27,6 +27,7 @@ const AddExpense = () => {
   const [fxRate, setFxRate] = useState<number>(1);
   const [isFetchingRate, setIsFetchingRate] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [scanSuccess, setScanSuccess] = useState(false);
 
   useEffect(() => {
     if (members.length > 0) {
@@ -67,15 +68,43 @@ const AddExpense = () => {
     return (numericAmount * fxRate).toFixed(2);
   }, [amount, fxRate]);
 
-  const convertToBase64 = (file: File): Promise<string> => {
+  const resizeImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
-      reader.onload = () => {
-        const base64String = reader.result as string;
-        resolve(base64String.split(',')[1]);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 1024;
+          const MAX_HEIGHT = 1024;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          resolve(dataUrl.split(',')[1]);
+        };
+        img.onerror = reject;
       };
-      reader.onerror = (error) => reject(error);
+      reader.onerror = reject;
     });
   };
 
@@ -86,13 +115,16 @@ const AddExpense = () => {
     try {
       setIsScanning(true);
       setError(null);
-      const imageData = await convertToBase64(file);
+      setScanSuccess(false);
+      const imageData = await resizeImage(file);
       const result = await scanReceipt({ data: { imageData } });
 
       if (result) {
         setDescription(result.merchant);
         setAmount(result.total.toString());
         setCurrency(result.currency);
+        setScanSuccess(true);
+        setTimeout(() => setScanSuccess(false), 3000);
       }
     } catch (err: any) {
       setError(`Receipt scanning failed: ${err.message}`);
@@ -332,6 +364,11 @@ const AddExpense = () => {
                       </>
                     )}
                   </button>
+                  {scanSuccess && (
+                    <span className="text-xs text-green-600 font-medium animate-in fade-in duration-300">
+                      Receipt scanned successfully!
+                    </span>
+                  )}
                 </div>
               </div>
               <input
