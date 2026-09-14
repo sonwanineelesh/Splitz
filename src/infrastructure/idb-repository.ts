@@ -1,56 +1,83 @@
 import { openDB, IDBPDatabase } from 'idb';
 import { ISplitzRepository, Group, Member, Expense, Split } from '../domain/types';
 
-const DB_NAME = 'splitz-db';
-const DB_VERSION = 1;
+const DEFAULT_DB_NAME = 'splitz-db';
+const DB_VERSION = 2;
 
 export class IndexedDBRepository implements ISplitzRepository {
   private dbPromise: Promise<IDBPDatabase>;
 
-  constructor() {
-    this.dbPromise = openDB(DB_NAME, DB_VERSION, {
-      upgrade(db) {
-        if (!db.objectStoreNames.contains('groups')) {
+  constructor(dbName: string = DEFAULT_DB_NAME) {
+    this.dbPromise = openDB(dbName, DB_VERSION, {
+      upgrade(db, oldVersion, newVersion, transaction) {
+        if (oldVersion < 1) {
           db.createObjectStore('groups', { keyPath: 'id' });
-        }
-        if (!db.objectStoreNames.contains('members')) {
           db.createObjectStore('members', { keyPath: 'id' });
-        }
-        if (!db.objectStoreNames.contains('expenses')) {
           db.createObjectStore('expenses', { keyPath: 'id' });
-        }
-        if (!db.objectStoreNames.contains('splits')) {
           db.createObjectStore('splits', { keyPath: 'id' });
+        }
+
+        const membersStore = transaction.objectStore('members');
+        if (!membersStore.indexNames.contains('groupId')) {
+          membersStore.createIndex('groupId', 'groupId');
+        }
+
+        const expensesStore = transaction.objectStore('expenses');
+        if (!expensesStore.indexNames.contains('groupId')) {
+          expensesStore.createIndex('groupId', 'groupId');
+        }
+
+        const splitsStore = transaction.objectStore('splits');
+        if (!splitsStore.indexNames.contains('expenseId')) {
+          splitsStore.createIndex('expenseId', 'expenseId');
         }
       },
     });
   }
 
   async getGroups(): Promise<Group[]> {
-    const db = await this.dbPromise;
-    return db.getAll('groups');
+    try {
+      const db = await this.dbPromise;
+      return await db.getAll('groups');
+    } catch (error) {
+      throw new Error(`Failed to retrieve groups: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   async saveGroup(group: Group): Promise<void> {
-    const db = await this.dbPromise;
-    await db.put('groups', group);
+    try {
+      const db = await this.dbPromise;
+      await db.put('groups', group);
+    } catch (error) {
+      throw new Error(`Failed to save group: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   async getMembers(groupId: string): Promise<Member[]> {
-    const db = await this.dbPromise;
-    const members = await db.getAll('members');
-    return members.filter(m => m.groupId === groupId);
+    try {
+      const db = await this.dbPromise;
+      return await db.getAllFromIndex('members', 'groupId', groupId);
+    } catch (error) {
+      throw new Error(`Failed to retrieve members for group ${groupId}: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   async saveMember(member: Member): Promise<void> {
-    const db = await this.dbPromise;
-    await db.put('members', member);
+    try {
+      const db = await this.dbPromise;
+      await db.put('members', member);
+    } catch (error) {
+      throw new Error(`Failed to save member: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   async getExpenses(groupId: string): Promise<Expense[]> {
-    const db = await this.dbPromise;
-    const expenses = await db.getAll('expenses');
-    return expenses.filter(e => e.groupId === groupId);
+    try {
+      const db = await this.dbPromise;
+      return await db.getAllFromIndex('expenses', 'groupId', groupId);
+    } catch (error) {
+      throw new Error(`Failed to retrieve expenses for group ${groupId}: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   async saveExpense(expense: Expense, splits: Split[]): Promise<void> {
@@ -64,14 +91,38 @@ export class IndexedDBRepository implements ISplitzRepository {
       }
       await tx.done;
     } catch (error) {
-      tx.abort();
-      throw error;
+      // In idb, tx.abort() can be called, but the error from the failed put
+      // will already cause the transaction to abort.
+      // We just need to make sure we don't leave an unhandled rejection from tx.done.
+      try {
+        await tx.abort();
+      } catch (e) {
+        // Ignore abort errors
+      }
+      throw new Error(`Failed to save expense and splits: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   async getSplits(expenseId: string): Promise<Split[]> {
-    const db = await this.dbPromise;
-    const splits = await db.getAll('splits');
-    return splits.filter(s => s.expenseId === expenseId);
+    try {
+      const db = await this.dbPromise;
+      return await db.getAllFromIndex('splits', 'expenseId', expenseId);
+    } catch (error) {
+      throw new Error(`Failed to retrieve splits for expense ${expenseId}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  async clear(): Promise<void> {
+    try {
+      const db = await this.dbPromise;
+      const tx = db.transaction(['groups', 'members', 'expenses', 'splits'], 'readwrite');
+      tx.objectStore('groups').clear();
+      tx.objectStore('members').clear();
+      tx.objectStore('expenses').clear();
+      tx.objectStore('splits').clear();
+      await tx.done;
+    } catch (error) {
+      throw new Error(`Failed to clear database: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 }
