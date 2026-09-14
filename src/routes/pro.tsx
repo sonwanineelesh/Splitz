@@ -44,14 +44,18 @@ const ProPage = () => {
           </ul>
 
           <button
+            onClick={() => {
+              storeActions.setProStatus(false);
+              navigate('/');
+            }}
             disabled={!isPro}
             className={`w-full py-3 rounded-xl font-bold transition-all ${
-              isPro
+              !isPro
                 ? 'bg-gray-100 text-gray-400 cursor-default'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300 active:scale-[0.98]'
             }`}
           >
-            {isPro ? 'Current Plan' : 'Current Plan'}
+            {isPro ? 'Downgrade to Free' : 'Current Plan'}
           </button>
         </div>
 
