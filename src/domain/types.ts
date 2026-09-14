@@ -40,6 +40,16 @@ export interface Split {
   amount: number; // Minor units (e.g., cents)
 }
 
+export interface RecurringRule {
+  id: string;
+  groupId: string;
+  expenseTemplate: Partial<Expense>;
+  frequency: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  lastRunTimestamp: number;
+  startDate: number;
+  endDate?: number;
+}
+
 export interface ISplitzRepository {
   getGroups(): Promise<Group[]>;
   saveGroup(group: Group): Promise<void>;
@@ -48,4 +58,6 @@ export interface ISplitzRepository {
   getExpenses(groupId: string): Promise<Expense[]>;
   saveExpense(expense: Expense, splits: Split[]): Promise<void>;
   getSplits(expenseId: string): Promise<Split[]>;
+  getRecurringRules(groupId: string): Promise<RecurringRule[]>;
+  saveRecurringRule(rule: RecurringRule): Promise<void>;
 }

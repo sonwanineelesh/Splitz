@@ -1,6 +1,7 @@
 import { Store } from '@tanstack/store';
 import { Group, Member, ISplitzRepository } from '../domain/types';
 import { IndexedDBRepository } from '../infrastructure/idb-repository';
+import { recurringService } from '../services/recurring-service';
 
 export interface StoreState {
   groups: Group[];
@@ -26,6 +27,13 @@ export const storeActions = {
       ...state,
       groups,
     }));
+
+    // Process recurring expenses on app load
+    try {
+      await recurringService.processRecurringExpenses();
+    } catch (error) {
+      console.error('Failed to process recurring expenses:', error);
+    }
   },
 
   async calculateOverallBalance() {

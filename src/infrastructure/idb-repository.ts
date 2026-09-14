@@ -17,6 +17,11 @@ export class IndexedDBRepository implements ISplitzRepository {
           db.createObjectStore('splits', { keyPath: 'id' });
         }
 
+        if (oldVersion < 2) {
+          const recurringStore = db.createObjectStore('recurringRules', { keyPath: 'id' });
+          recurringStore.createIndex('groupId', 'groupId');
+        }
+
         const membersStore = transaction.objectStore('members');
         if (!membersStore.indexNames.contains('groupId')) {
           membersStore.createIndex('groupId', 'groupId');
@@ -112,14 +117,33 @@ export class IndexedDBRepository implements ISplitzRepository {
     }
   }
 
+  async getRecurringRules(groupId: string): Promise<RecurringRule[]> {
+    try {
+      const db = await this.dbPromise;
+      return await db.getAllFromIndex('recurringRules', 'groupId', groupId);
+    } catch (error) {
+      throw new Error(`Failed to retrieve recurring rules for group ${groupId}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  async saveRecurringRule(rule: RecurringRule): Promise<void> {
+    try {
+      const db = await this.dbPromise;
+      await db.put('recurringRules', rule);
+    } catch (error) {
+      throw new Error(`Failed to save recurring rule: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
   async clear(): Promise<void> {
     try {
       const db = await this.dbPromise;
-      const tx = db.transaction(['groups', 'members', 'expenses', 'splits'], 'readwrite');
+      const tx = db.transaction(['groups', 'members', 'expenses', 'splits', 'recurringRules'], 'readwrite');
       tx.objectStore('groups').clear();
       tx.objectStore('members').clear();
       tx.objectStore('expenses').clear();
       tx.objectStore('splits').clear();
+      tx.objectStore('recurringRules').clear();
       await tx.done;
     } catch (error) {
       throw new Error(`Failed to clear database: ${error instanceof Error ? error.message : String(error)}`);
