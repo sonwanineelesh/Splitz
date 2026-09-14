@@ -69,7 +69,13 @@ const ExpenseFeed = ({ expenses, members, group }: { expenses: Expense[]; member
   );
 };
 
-const BalanceSummary = ({ simplifiedPayments, members, group }: { simplifiedPayments: any[]; members: Member[]; group: Group }) => {
+interface SimplifiedPayment {
+  from: string;
+  to: string;
+  amount: number;
+}
+
+const BalanceSummary = ({ simplifiedPayments, members, group }: { simplifiedPayments: SimplifiedPayment[]; members: Member[]; group: Group }) => {
   return (
     <div className="lg:col-span-1">
       <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden sticky top-8">

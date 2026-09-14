@@ -34,18 +34,24 @@ const Activity = () => {
         const matchedMembers: Member[] = [];
         const matchedExpenses: { expense: Expense; group: Group }[] = [];
 
-        for (const group of groups) {
-          const members = await repo.getMembers(group.id);
-          const expenses = await repo.getExpenses(group.id);
+        const searchResults = await Promise.all(groups.map(async (group) => {
+          const [members, expenses] = await Promise.all([
+            repo.getMembers(group.id),
+            repo.getExpenses(group.id)
+          ]);
 
-          matchedMembers.push(...members.filter(m => m.name.toLowerCase().includes(lowerSearch)));
+          return {
+            members: members.filter(m => m.name.toLowerCase().includes(lowerSearch)),
+            expenses: expenses
+              .filter(expense => expense.description.toLowerCase().includes(lowerSearch))
+              .map(expense => ({ expense, group }))
+          };
+        }));
 
-          expenses.forEach(expense => {
-            if (expense.description.toLowerCase().includes(lowerSearch)) {
-              matchedExpenses.push({ expense, group });
-            }
-          });
-        }
+        searchResults.forEach(({ members, expenses }) => {
+          matchedMembers.push(...members);
+          matchedExpenses.push(...expenses);
+        });
 
         setResults({
           groups: matchedGroups,
