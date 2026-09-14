@@ -28,12 +28,10 @@ export const storeActions = {
       groups,
     }));
 
-    // Process recurring expenses on app load
-    try {
-      await recurringService.processRecurringExpenses();
-    } catch (error) {
+    // Process recurring expenses on app load (non-blocking)
+    recurringService.processRecurringExpenses().catch((error) => {
       console.error('Failed to process recurring expenses:', error);
-    }
+    });
   },
 
   async calculateOverallBalance() {

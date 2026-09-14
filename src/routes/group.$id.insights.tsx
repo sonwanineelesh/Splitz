@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { repo } from '../store';
@@ -27,36 +27,61 @@ export default function GroupInsights() {
   }, [id]);
 
   if (loading) {
-    return <div className="p-8 text-center">Loading insights...</div>;
+    return (
+      <div className="p-8 text-center flex flex-col items-center justify-center space-y-4">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        <p className="text-gray-500">Loading your spending insights...</p>
+      </div>
+    );
   }
 
   if (!expenses || expenses.length === 0) {
-    return <div className="p-8 text-center">No data available to generate insights.</div>;
+    return (
+      <div className="p-8 text-center flex flex-col items-center justify-center space-y-4">
+        <div className="text-gray-300 text-5xl">📊</div>
+        <p className="text-gray-500">No expense data available yet. Start adding expenses to see insights!</p>
+      </div>
+    );
   }
 
   // Aggregate data for Spend by Category (Pie Chart)
-  const categoryData = expenses.reduce((acc, exp) => {
-    const cat = exp.category || 'Other';
-    acc[cat] = (acc[cat] || 0) + exp.amount;
-    return acc;
-  }, {} as Record<string, number>);
+  const pieChartData = useMemo(() => {
+    const categoryData = expenses.reduce((acc, exp) => {
+      const cat = exp.category || 'Other';
+      acc[cat] = (acc[cat] || 0) + exp.amount;
+      return acc;
+    }, {} as Record<string, number>);
 
-  const pieChartData = Object.entries(categoryData).map(([name, value]) => ({ name, value }));
+    return Object.entries(categoryData).map(([name, value]) => ({ name, value }));
+  }, [expenses]);
 
   // Aggregate data for Spend over Time (Bar Chart) - Monthly
-  const timeData = expenses.reduce((acc, exp) => {
-    const date = new Date(exp.date);
-    const month = date.toLocaleString('default', { month: 'short', year: 'numeric' });
-    acc[month] = (acc[month] || 0) + exp.amount;
-    return acc;
-  }, {} as Record<string, number>);
+  const barChartData = useMemo(() => {
+    const timeDataMap = expenses.reduce((acc, exp) => {
+      const date = new Date(exp.date);
+      const year = date.getFullYear();
+      const month = date.getMonth();
+      const key = `${year}-${month}`;
 
-  // Sort time data by date (approximate)
-  const barChartData = Object.entries(timeData)
-    .map(([name, value]) => ({ name, value }))
-    .sort((a, b) => {
-      return new Date(a.name).getTime() - new Date(b.name).getTime();
-    });
+      if (!acc[key]) {
+        acc[key] = {
+          label: date.toLocaleString('default', { month: 'short', year: 'numeric' }),
+          value: 0,
+          timestamp: new Date(year, month, 1).getTime()
+        };
+      }
+      acc[key].value += exp.amount;
+      return acc;
+    }, {} as Record<string, { label: string, value: number, timestamp: number }>);
+
+    return Object.values(timeDataMap)
+      .map(item => ({
+        name: item.label,
+        value: item.value,
+        sortKey: item.timestamp
+      }))
+      .sort((a, b) => a.sortKey - b.sortKey);
+  }, [expenses]);
 
   return (
     <div className="p-6 space-y-8">
@@ -68,7 +93,7 @@ export default function GroupInsights() {
           <h2 className="text-lg font-semibold mb-4 text-center">Spend by Category</h2>
           <div className="h-80 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
+                <PieChart aria-label="Spending by category pie chart">
                 <Pie
                   data={pieChartData}
                   cx="50%"
@@ -94,7 +119,7 @@ export default function GroupInsights() {
           <h2 className="text-lg font-semibold mb-4 text-center">Spend over Time</h2>
           <div className="h-80 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barChartData}>
+                <BarChart data={barChartData} aria-label="Spending over time bar chart">
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="name" />
                 <YAxis tickFormatter={(value) => `$${(value / 100).toFixed(0)}`} />
