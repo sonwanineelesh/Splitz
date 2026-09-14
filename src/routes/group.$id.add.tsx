@@ -5,6 +5,7 @@ import { store, repo } from '../store';
 import { Expense, Split } from '../domain/types';
 import { calculateSplits, SplitStrategy } from '../services/split-logic';
 import { getExchangeRate, COMMON_CURRENCIES } from '../services/currency-service';
+import { scanReceipt } from '../services/ai-service';
 
 const AddExpense = () => {
   const { groupId } = useParams<{ groupId: string }>();
@@ -25,6 +26,7 @@ const AddExpense = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [fxRate, setFxRate] = useState<number>(1);
   const [isFetchingRate, setIsFetchingRate] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
 
   useEffect(() => {
     if (members.length > 0) {
@@ -64,6 +66,40 @@ const AddExpense = () => {
     const numericAmount = parseFloat(amount) || 0;
     return (numericAmount * fxRate).toFixed(2);
   }, [amount, fxRate]);
+
+  const convertToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        const base64String = reader.result as string;
+        resolve(base64String.split(',')[1]);
+      };
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
+  const handleScanReceipt = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsScanning(true);
+      setError(null);
+      const imageData = await convertToBase64(file);
+      const result = await scanReceipt({ data: { imageData } });
+
+      if (result) {
+        setDescription(result.merchant);
+        setAmount(result.total.toString());
+        setCurrency(result.currency);
+      }
+    } catch (err: any) {
+      setError(`Receipt scanning failed: ${err.message}`);
+    } finally {
+      setIsScanning(false);
+    }
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     setError(null);
@@ -270,7 +306,34 @@ const AddExpense = () => {
         ) : (
           <>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">Description</label>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-gray-700">Description</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    id="receipt-upload"
+                    className="hidden"
+                    accept="image/*"
+                    onChange={handleScanReceipt}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById('receipt-upload')?.click()}
+                    disabled={isScanning}
+                    className="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1 transition-colors disabled:text-gray-400"
+                  >
+                    {isScanning ? (
+                      <>
+                        <span className="animate-spin">↻</span> Scanning receipt...
+                      </>
+                    ) : (
+                      <>
+                        <span>📷</span> Scan Receipt
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
               <input
                 type="text"
                 value={description}
