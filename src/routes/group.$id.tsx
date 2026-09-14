@@ -1,9 +1,104 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStore } from '@tanstack/react-store';
 import { store, storeActions, repo } from '../store';
 import { simplifyDebts } from '../services/debt-simplifier';
 import { Expense, Split, Group, Member } from '../domain/types';
+
+const formatCurrency = (amount: number, currency: string) => {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency,
+  }).format(amount / 100);
+};
+
+const getMemberName = (memberId: string, members: Member[]) => {
+  return members.find((m) => m.id === memberId)?.name || 'Unknown Member';
+};
+
+const ExpenseItem = ({ expense, members, group }: { expense: Expense; members: Member[]; group: Group }) => {
+  const amountInHomeCurrency = expense.amount * expense.fxRateToHome;
+
+  return (
+    <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow flex items-center justify-between">
+      <div className="flex items-center gap-4">
+        <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 font-bold text-lg">
+          {getMemberName(expense.paidByMemberId, members).charAt(0)}
+        </div>
+        <div>
+          <h3 className="font-semibold text-gray-800">{expense.description}</h3>
+          <p className="text-xs text-gray-500">
+            Paid by {getMemberName(expense.paidByMemberId, members)} &bull; {new Date(expense.date).toLocaleDateString()}
+          </p>
+        </div>
+      </div>
+      <div className="text-right">
+        <div className="font-bold text-gray-900">
+          {formatCurrency(amountInHomeCurrency, group.homeCurrency)}
+        </div>
+        {expense.currency !== group.homeCurrency && (
+          <div className="text-xs text-gray-400">
+            {formatCurrency(expense.amount, expense.currency)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const ExpenseFeed = ({ expenses, members, group }: { expenses: Expense[]; members: Member[]; group: Group }) => {
+  return (
+    <div className="lg:col-span-2">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-bold text-gray-800">Expense Feed</h2>
+      </div>
+
+      {expenses.length === 0 ? (
+        <div className="text-center py-12 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
+          <p className="text-gray-500">No expenses added yet.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {expenses.map((expense) => (
+            <ExpenseItem key={expense.id} expense={expense} members={members} group={group} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const BalanceSummary = ({ simplifiedPayments, members, group }: { simplifiedPayments: any[]; members: Member[]; group: Group }) => {
+  return (
+    <div className="lg:col-span-1">
+      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden sticky top-8">
+        <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+          <h2 className="text-lg font-bold text-gray-800">Balances</h2>
+        </div>
+        <div className="p-4">
+          {simplifiedPayments.length === 0 ? (
+            <p className="text-gray-500 text-center py-4 text-sm">All settled up!</p>
+          ) : (
+            <ul className="space-y-3">
+              {simplifiedPayments.map((payment, idx) => (
+                <li key={idx} className="flex items-center justify-between text-sm p-2 bg-gray-50 rounded-lg border border-gray-100">
+                  <div className="flex flex-col">
+                    <span className="font-medium text-gray-700">{getMemberName(payment.from, members)}</span>
+                    <span className="text-xs text-gray-400">owes</span>
+                    <span className="font-medium text-gray-700">{getMemberName(payment.to, members)}</span>
+                  </div>
+                  <span className="font-bold text-blue-600">
+                    {formatCurrency(payment.amount, group.homeCurrency)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const GroupDetail = () => {
   const { groupId } = useParams<{ groupId: string }>();
@@ -66,18 +161,7 @@ const GroupDetail = () => {
     );
   }
 
-  const simplifiedPayments = simplifyDebts(expenses, splits);
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: group.homeCurrency,
-    }).format(amount / 100);
-  };
-
-  const getMemberName = (memberId: string) => {
-    return members.find((m) => m.id === memberId)?.name || 'Unknown Member';
-  };
+  const simplifiedPayments = useMemo(() => simplifyDebts(expenses, splits), [expenses, splits]);
 
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-8 font-sans text-gray-900">
@@ -98,81 +182,8 @@ const GroupDetail = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left Column: Balance Summary */}
-        <div className="lg:col-span-1">
-          <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden sticky top-8">
-            <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-              <h2 className="text-lg font-bold text-gray-800">Balances</h2>
-            </div>
-            <div className="p-4">
-              {simplifiedPayments.length === 0 ? (
-                <p className="text-gray-500 text-center py-4 text-sm">All settled up!</p>
-              ) : (
-                <ul className="space-y-3">
-                  {simplifiedPayments.map((payment, idx) => (
-                    <li key={idx} className="flex items-center justify-between text-sm p-2 bg-gray-50 rounded-lg border border-gray-100">
-                      <div className="flex flex-col">
-                        <span className="font-medium text-gray-700">{getMemberName(payment.from)}</span>
-                        <span className="text-xs text-gray-400">owes</span>
-                        <span className="font-medium text-gray-700">{getMemberName(payment.to)}</span>
-                      </div>
-                      <span className="font-bold text-blue-600">
-                        {formatCurrency(payment.amount)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: Expense Feed */}
-        <div className="lg:col-span-2">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-gray-800">Expense Feed</h2>
-          </div>
-
-          {expenses.length === 0 ? (
-            <div className="text-center py-12 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
-              <p className="text-gray-500">No expenses added yet.</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {expenses.map((expense) => {
-                const amountInHomeCurrency = expense.amount * expense.fxRateToHome;
-                return (
-                  <div
-                    key={expense.id}
-                    className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 font-bold text-lg">
-                        {getMemberName(expense.paidByMemberId).charAt(0)}
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-gray-800">{expense.description}</h3>
-                        <p className="text-xs text-gray-500">
-                          Paid by {getMemberName(expense.paidByMemberId)} &bull; {new Date(expense.date).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-bold text-gray-900">
-                        {formatCurrency(amountInHomeCurrency)}
-                      </div>
-                      {expense.currency !== group.homeCurrency && (
-                        <div className="text-xs text-gray-400">
-                          {formatCurrency(expense.amount)} {expense.currency}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        <BalanceSummary simplifiedPayments={simplifiedPayments} members={members} group={group} />
+        <ExpenseFeed expenses={expenses} members={members} group={group} />
       </div>
     </div>
   );
