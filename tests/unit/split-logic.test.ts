@@ -38,6 +38,20 @@ describe('split-logic', () => {
         { memberId: 'm4', amount: 2500 },
       ]);
     });
+
+    it('should return empty array when memberIds is empty', () => {
+      const result = calculateSplits(total, [], { type: 'equal' });
+      expect(result).toEqual([]);
+    });
+
+    it('should handle total being 0', () => {
+      const result = calculateSplits(0, members, { type: 'equal' });
+      expect(result).toEqual([
+        { memberId: 'm1', amount: 0 },
+        { memberId: 'm2', amount: 0 },
+        { memberId: 'm3', amount: 0 },
+      ]);
+    });
   });
 
   describe('Exact split', () => {
@@ -60,6 +74,28 @@ describe('split-logic', () => {
         amounts: { 'm1': 5000, 'm2': 3000, 'm3': 1000 }, // sum 9000 != 10000
       };
       expect(() => calculateSplits(total, members, strategy)).toThrow('Total amount must match the sum of individual amounts');
+    });
+
+    it('should return empty array when memberIds is empty', () => {
+      const strategy = {
+        type: 'exact',
+        amounts: { 'm1': 10000 },
+      };
+      const result = calculateSplits(total, [], strategy);
+      expect(result).toEqual([]);
+    });
+
+    it('should handle total being 0', () => {
+      const strategy = {
+        type: 'exact',
+        amounts: { 'm1': 0, 'm2': 0, 'm3': 0 },
+      };
+      const result = calculateSplits(0, members, strategy);
+      expect(result).toEqual([
+        { memberId: 'm1', amount: 0 },
+        { memberId: 'm2', amount: 0 },
+        { memberId: 'm3', amount: 0 },
+      ]);
     });
   });
 
@@ -101,6 +137,40 @@ describe('split-logic', () => {
       };
       expect(() => calculateSplits(total, members, strategy)).toThrow('Percentages must sum to 100%');
     });
+
+    it('should return empty array when memberIds is empty', () => {
+      const strategy = {
+        type: 'percentage',
+        percentages: { 'm1': 100 },
+      };
+      const result = calculateSplits(total, [], strategy);
+      expect(result).toEqual([]);
+    });
+
+    it('should handle total being 0', () => {
+      const strategy = {
+        type: 'percentage',
+        percentages: { 'm1': 50, 'm2': 50 },
+      };
+      const result = calculateSplits(0, ['m1', 'm2'], strategy);
+      expect(result).toEqual([
+        { memberId: 'm1', amount: 0 },
+        { memberId: 'm2', amount: 0 },
+      ]);
+    });
+
+    it('should handle 100% allocation to a single member', () => {
+      const strategy = {
+        type: 'percentage',
+        percentages: { 'm1': 100, 'm2': 0, 'm3': 0 },
+      };
+      const result = calculateSplits(total, members, strategy);
+      expect(result).toEqual([
+        { memberId: 'm1', amount: 10000 },
+        { memberId: 'm2', amount: 0 },
+        { memberId: 'm3', amount: 0 },
+      ]);
+    });
   });
 
   describe('Shares split', () => {
@@ -130,6 +200,40 @@ describe('split-logic', () => {
         { memberId: 'm1', amount: 3334 },
         { memberId: 'm2', amount: 3334 },
         { memberId: 'm3', amount: 3333 },
+      ]);
+    });
+
+    it('should return empty array when memberIds is empty', () => {
+      const strategy = {
+        type: 'shares',
+        shares: { 'm1': 1 },
+      };
+      const result = calculateSplits(total, [], strategy);
+      expect(result).toEqual([]);
+    });
+
+    it('should handle total being 0', () => {
+      const strategy = {
+        type: 'shares',
+        shares: { 'm1': 1, 'm2': 1 },
+      };
+      const result = calculateSplits(0, ['m1', 'm2'], strategy);
+      expect(result).toEqual([
+        { memberId: 'm1', amount: 0 },
+        { memberId: 'm2', amount: 0 },
+      ]);
+    });
+
+    it('should handle 100% allocation to a single member', () => {
+      const strategy = {
+        type: 'shares',
+        shares: { 'm1': 1, 'm2': 0, 'm3': 0 },
+      };
+      const result = calculateSplits(total, members, strategy);
+      expect(result).toEqual([
+        { memberId: 'm1', amount: 10000 },
+        { memberId: 'm2', amount: 0 },
+        { memberId: 'm3', amount: 0 },
       ]);
     });
   });

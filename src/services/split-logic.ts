@@ -29,19 +29,20 @@ export function calculateSplits(
   memberIds: string[],
   strategy: SplitStrategy
 ): SplitResult[] {
+  if (memberIds.length === 0) return [];
+
   switch (strategy.type) {
     case 'equal': {
       const count = memberIds.length;
-      if (count === 0) return [];
-
       const baseAmount = Math.floor(total / count);
-      let remainder = total % count;
+      const currentTotal = baseAmount * count;
 
-      return memberIds.map((memberId) => {
-        const amount = baseAmount + (remainder > 0 ? 1 : 0);
-        if (remainder > 0) remainder--;
-        return { memberId, amount };
-      });
+      const results = memberIds.map((memberId) => ({
+        memberId,
+        amount: baseAmount,
+      }));
+
+      return distributeRemainder(results, total, currentTotal);
     }
 
     case 'exact': {
@@ -62,7 +63,6 @@ export function calculateSplits(
     }
 
     case 'percentage': {
-      const results: SplitResult[] = [];
       let totalPercentage = 0;
 
       for (const memberId of memberIds) {
@@ -70,7 +70,6 @@ export function calculateSplits(
         totalPercentage += percentage;
       }
 
-      // Use a small epsilon for float comparison
       if (Math.abs(totalPercentage - 100) > 0.0001) {
         throw new Error('Percentages must sum to 100%');
       }
@@ -83,18 +82,15 @@ export function calculateSplits(
         return { memberId, amount };
       });
 
-      let remainder = total - currentTotal;
-      const finalResults = resultsWithAmounts.map((res) => {
-        const amount = res.amount + (remainder > 0 ? 1 : 0);
-        if (remainder > 0) remainder--;
-        return { ...res, amount };
-      });
-
-      return finalResults;
+      return distributeRemainder(resultsWithAmounts, total, currentTotal);
     }
 
     case 'shares': {
-      const totalShares = Object.values(strategy.shares).reduce((acc, val) => acc + val, 0);
+      const totalShares = memberIds.reduce(
+        (acc, memberId) => acc + (strategy.shares[memberId] || 0),
+        0
+      );
+
       if (totalShares === 0) {
         throw new Error('Total shares must be greater than 0');
       }
@@ -109,14 +105,20 @@ export function calculateSplits(
         return { memberId, amount };
       });
 
-      let remainder = total - currentTotal;
-      const finalResults = resultsWithAmounts.map((res) => {
-        const amount = res.amount + (remainder > 0 ? 1 : 0);
-        if (remainder > 0) remainder--;
-        return { ...res, amount };
-      });
-
-      return finalResults;
+      return distributeRemainder(resultsWithAmounts, total, currentTotal);
     }
   }
+}
+
+function distributeRemainder(
+  results: SplitResult[],
+  total: number,
+  currentTotal: number
+): SplitResult[] {
+  let remainder = total - currentTotal;
+  return results.map((res) => {
+    const amount = res.amount + (remainder > 0 ? 1 : 0);
+    if (remainder > 0) remainder--;
+    return { ...res, amount };
+  });
 }
