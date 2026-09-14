@@ -48,7 +48,7 @@ const AddExpense = () => {
 
       try {
         setIsFetchingRate(true);
-        const rate = await getExchangeRate(currency, group.homeCurrency);
+        const rate = await getExchangeRate({ data: { from: currency, to: group.homeCurrency } });
         setFxRate(rate);
       } catch (err: any) {
         setError(`Could not fetch exchange rate: ${err.message}`);
