@@ -4,6 +4,7 @@ import { useStore } from '@tanstack/react-store';
 import { store, storeActions } from '../store';
 import { Group } from '../domain/types';
 import GroupDetail from './group.$id';
+import Activity from './activity';
 
 const BalanceSummary = ({ totals }: { totals: { paid: number, owed: number, net: number } }) => (
   <div style={{
@@ -139,7 +140,12 @@ const Home = () => {
       <BalanceSummary totals={totals} />
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2>Your Groups</h2>
+        <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          Your Groups
+          <Link to="/activity" style={{ fontSize: '14px', color: '#007bff', textDecoration: 'none', fontWeight: 'normal' }}>
+            Search Activity &rarr;
+          </Link>
+        </h2>
         <button
           onClick={() => setIsModalOpen(true)}
           style={{ padding: '10px 20px', cursor: 'pointer' }}
@@ -166,6 +172,7 @@ export const AppRoutes = () => {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/group/:groupId" element={<GroupDetail />} />
+        <Route path="/activity" element={<Activity />} />
       </Routes>
     </BrowserRouter>
   );

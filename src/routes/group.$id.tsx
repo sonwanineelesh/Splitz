@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useStore } from '@tanstack/react-store';
 import { store, storeActions, repo } from '../store';
 import { simplifyDebts } from '../services/debt-simplifier';
+import { exportGroupToCSV } from '../services/export-service';
 import { Expense, Split, Group, Member } from '../domain/types';
 
 const formatCurrency = (amount: number, currency: string) => {
@@ -167,14 +168,22 @@ const GroupDetail = () => {
     <div className="max-w-4xl mx-auto p-4 md:p-8 font-sans text-gray-900">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
-        <div>
+        <div className="flex-1">
           <button
             onClick={() => navigate('/')}
             className="text-blue-500 hover:text-blue-700 mb-2 flex items-center gap-1 text-sm font-medium"
           >
             &larr; Back to Home
           </button>
-          <h1 className="text-3xl font-extrabold tracking-tight">{group.name}</h1>
+          <div className="flex items-center gap-4">
+            <h1 className="text-3xl font-extrabold tracking-tight">{group.name}</h1>
+            <button
+              onClick={() => exportGroupToCSV(group.id, expenses)}
+              className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1 rounded border border-gray-300 transition-colors"
+            >
+              Export CSV
+            </button>
+          </div>
         </div>
         <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-semibold">
           {group.homeCurrency}
