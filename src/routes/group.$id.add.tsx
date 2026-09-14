@@ -4,6 +4,7 @@ import { useStore } from '@tanstack/react-store';
 import { store, repo } from '../store';
 import { Expense, Split } from '../domain/types';
 import { calculateSplits, SplitStrategy } from '../services/split-logic';
+import { getExchangeRate, COMMON_CURRENCIES } from '../services/currency-service';
 
 const AddExpense = () => {
   const { groupId } = useParams<{ groupId: string }>();
@@ -15,12 +16,15 @@ const AddExpense = () => {
   const [isSettleUp, setIsSettleUp] = useState(false);
   const [payerId, setPayerId] = useState('');
   const [amount, setAmount] = useState('');
+  const [currency, setCurrency] = useState('');
   const [description, setDescription] = useState('');
   const [splitMode, setSplitMode] = useState<'equal' | 'exact' | 'percentage' | 'shares'>('equal');
   const [splitValues, setSplitValues] = useState<Record<string, number>>({});
   const [settleUpToId, setSettleUpToId] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [fxRate, setFxRate] = useState<number>(1);
+  const [isFetchingRate, setIsFetchingRate] = useState(false);
 
   useEffect(() => {
     if (members.length > 0) {
@@ -29,10 +33,39 @@ const AddExpense = () => {
         setSettleUpToId(members[1]?.id || '');
       }
     }
-  }, [members, isSettleUp]);
+    if (group) {
+      setCurrency(group.homeCurrency);
+    }
+  }, [members, isSettleUp, group]);
+
+  useEffect(() => {
+    const updateRate = async () => {
+      if (!group || !currency) return;
+      if (currency === group.homeCurrency) {
+        setFxRate(1);
+        return;
+      }
+
+      try {
+        setIsFetchingRate(true);
+        const rate = await getExchangeRate(currency, group.homeCurrency);
+        setFxRate(rate);
+      } catch (err: any) {
+        setError(`Could not fetch exchange rate: ${err.message}`);
+      } finally {
+        setIsFetchingRate(false);
+      }
+    };
+
+    updateRate();
+  }, [currency, group]);
+
+  const convertedAmount = useMemo(() => {
+    const numericAmount = parseFloat(amount) || 0;
+    return (numericAmount * fxRate).toFixed(2);
+  }, [amount, fxRate]);
 
   const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
     setError(null);
 
     if (!groupId || !group) {
@@ -77,8 +110,8 @@ const AddExpense = () => {
         groupId,
         paidByMemberId: payerId,
         amount: numericAmount,
-        currency: group.homeCurrency,
-        fxRateToHome: 1,
+        currency: currency,
+        fxRateToHome: fxRate,
         description: isSettleUp ? `Settle up with ${members.find(m => m.id === settleUpToId)?.name}` : description,
         category: isSettleUp ? 'Settle Up' : 'General',
         date: Date.now(),
@@ -182,15 +215,37 @@ const AddExpense = () => {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">Amount ({group.homeCurrency})</label>
-            <input
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="0.00"
-              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              required
-            />
+            <label className="text-sm font-medium text-gray-700">Amount</label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="number"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  required
+                />
+              </div>
+              <select
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+                className="w-24 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+              >
+                {COMMON_CURRENCIES.map(cur => (
+                  <option key={cur} value={cur}>{cur}</option>
+                ))}
+              </select>
+            </div>
+            {currency !== group.homeCurrency && (
+              <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
+                {isFetchingRate ? (
+                  <span>Fetching rate...</span>
+                ) : (
+                  <span>≈ {convertedAmount} {group.homeCurrency} (Rate: {fxRate.toFixed(4)})</span>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -262,7 +317,7 @@ const AddExpense = () => {
                             placeholder="0"
                           />
                           <span className="text-xs text-gray-400">
-                            {splitMode === 'exact' ? group.homeCurrency : splitMode === 'percentage' ? '%' : 'shares'}
+                            {splitMode === 'exact' ? currency : splitMode === 'percentage' ? '%' : 'shares'}
                           </span>
                         </div>
                       )}
