@@ -30,31 +30,44 @@ export const storeActions = {
 
   async calculateOverallBalance() {
     const groups = await repo.getGroups();
-    let totalPaid = 0;
-    let totalOwed = 0;
 
-    for (const group of groups) {
-      const members = await repo.getMembers(group.id);
+    const groupBalances = await Promise.all(groups.map(async (group) => {
+      const [members, expenses] = await Promise.all([
+        repo.getMembers(group.id),
+        repo.getExpenses(group.id)
+      ]);
+
       const user = members.find((m) => m.isUser);
-      if (!user) continue;
+      if (!user) return { paid: 0, owed: 0 };
 
-      const expenses = await repo.getExpenses(group.id);
-      for (const expense of expenses) {
+      const expenseBalances = await Promise.all(expenses.map(async (expense) => {
+        let paid = 0;
         if (expense.paidByMemberId === user.id) {
-          totalPaid += expense.amount;
+          paid = expense.amount;
         }
+
         const splits = await repo.getSplits(expense.id);
         const userSplit = splits.find((s) => s.memberId === user.id);
-        if (userSplit) {
-          totalOwed += userSplit.amount;
-        }
-      }
-    }
+        const owed = userSplit ? userSplit.amount : 0;
+
+        return { paid, owed };
+      }));
+
+      return expenseBalances.reduce((acc, curr) => ({
+        paid: acc.paid + curr.paid,
+        owed: acc.owed + curr.owed
+      }), { paid: 0, owed: 0 });
+    }));
+
+    const totals = groupBalances.reduce((acc, curr) => ({
+      paid: acc.paid + curr.paid,
+      owed: acc.owed + curr.owed
+    }), { paid: 0, owed: 0 });
 
     return {
-      paid: totalPaid,
-      owed: totalOwed,
-      net: totalPaid - totalOwed,
+      paid: totals.paid,
+      owed: totals.owed,
+      net: totals.paid - totals.owed,
     };
   },
 
@@ -62,7 +75,7 @@ export const storeActions = {
     const groups = store.getState().groups;
     const group = groups.find((g) => g.id === groupId) || null;
 
-    let members = [];
+    let members: Member[] = [];
     if (group) {
       members = await repo.getMembers(groupId);
     }
