@@ -1,0 +1,17 @@
+{
+  "name": "splitz",
+  "version": "0.1.0",
+  "description": "Splitwise alternative",
+  "type": "module",
+  "scripts": {
+    "test": "vitest"
+  },
+  "dependencies": {
+    "idb": "^8.0.0"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "^6.2.5",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  }
+}
