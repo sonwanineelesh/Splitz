@@ -1,9 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useTheme } from '../src/hooks/useTheme';
-import { useStore } from '../src/store/useStore';
-import { Settings as SettingsType } from '../src/types';
+import { useTheme } from '../../src/hooks/useTheme';
+import { useStore } from '../../src/store/useStore';
+import { Settings as SettingsType } from '../../src/types';
 import { Moon, Sun, Smartphone, Trash2 } from 'lucide-react-native';
 
 type ThemeOption = SettingsType['theme'];
