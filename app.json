@@ -11,6 +11,7 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.splitz.app",
       "adaptiveIcon": {
         "backgroundColor": "#F8F7F2",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -25,6 +26,13 @@
     "plugins": [
       "expo-router",
       "expo-status-bar"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "d900e53d-9426-4e6f-885e-2b92aeaf8f79"
+      }
+    },
+    "owner": "the_selftaught_dev"
   }
 }

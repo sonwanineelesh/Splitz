@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -12,8 +12,16 @@ export default function HomeScreen() {
   const router = useRouter();
   const theme = useTheme();
   
-  const { groups, members, expenses } = useStore();
+  const { groups, members, expenses, isFirstLaunch } = useStore();
   const myId = 'demo-user-1';
+
+  useEffect(() => {
+    if (isFirstLaunch) {
+      router.replace('/welcome');
+    }
+  }, [isFirstLaunch]);
+
+  if (isFirstLaunch) return null;
 
   let totalBalance = 0;
   const activeGroups = Object.values(groups).map(group => {
@@ -31,27 +39,28 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <View>
-            <Text style={[styles.greeting, { color: theme.textSecondary }]}>Good evening, Arpan</Text>
-            <Text style={[styles.appName, { color: theme.text }]}>Splitz</Text>
+          <View style={styles.header}>
+            <View>
+              <Text style={[styles.appName, { color: theme.text }]}>Splitz</Text>
+              <Text style={[styles.greeting, { color: theme.textSecondary }]}>Manage your expenses</Text>
+            </View>
+            <View style={styles.headerRight}>
+              <TouchableOpacity
+                style={[styles.headerIconBtn, { backgroundColor: theme.surface, borderWidth: 0 }]}
+                onPress={() => router.push('/menu')}
+              >
+                <Menu size={24} color={theme.text} strokeWidth={2} />
+              </TouchableOpacity>
+            </View>
           </View>
-          <View style={styles.headerRight}>
-            <TouchableOpacity
-              style={[styles.headerIconBtn, { backgroundColor: theme.surface, borderWidth: 0 }]}
-              onPress={() => router.push('/menu')}
-            >
-              <Menu size={24} color={theme.text} strokeWidth={2} />
-            </TouchableOpacity>
-          </View>
-        </View>
 
-        <View style={[styles.balanceCard, { backgroundColor: theme.primary }]}>
-          <Text style={styles.balCardLabel}>
-            {totalBalance >= 0 ? 'Total owed to you' : 'You owe in total'}
-          </Text>
-          <Text style={styles.balCardAmount}>{formatCurrency(Math.abs(totalBalance))}</Text>
-        </View>
+          <View style={[styles.balanceCard, { backgroundColor: theme.primary }]}>
+            <Text style={styles.balCardLabel}>Your total balance</Text>
+            <Text style={styles.balCardAmount}>{totalBalance >= 0 ? '+' : ''}{formatCurrency(Math.abs(totalBalance))}</Text>
+            <Text style={styles.balCardSubtext}>
+              {totalBalance >= 0 ? 'You are owed' : 'You owe'}
+            </Text>
+          </View>
 
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Recent Groups</Text>
@@ -104,8 +113,14 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     marginTop: 8,
   },
-  greeting: { fontFamily: 'Geist_400Regular', fontSize: 13, marginBottom: 4 },
-  appName: { fontFamily: 'Geist_600SemiBold', fontSize: 24 },
+  balCardSubtext: {
+    color: 'rgba(255,255,255,0.8)',
+    fontFamily: 'Geist_400Regular',
+    fontSize: 14,
+    marginTop: 4,
+  },
+  greeting: { fontFamily: 'Geist_400Regular', fontSize: 14, marginBottom: 4 },
+  appName: { fontFamily: 'Geist_600SemiBold', fontSize: 28, marginBottom: 2 },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
