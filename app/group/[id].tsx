@@ -1,14 +1,19 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Alert } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Alert, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Plus, ArrowLeft, MoreHorizontal, Users, Receipt } from 'lucide-react-native';
+import { Plus, ArrowLeft, MoreHorizontal, Users, Receipt, Search } from 'lucide-react-native';
 import { useStore } from '../../src/store/useStore';
 import { useTheme } from '../../src/hooks/useTheme';
 import { Avatar } from '../../src/components/Avatar';
-import { calculateBalances, calculateSettlements } from '../../src/utils/calculations';
+import { EXPENSE_CATEGORIES } from '../../src/constants/categories';
+import { ExpenseCategory } from '../../src/types';
+import { calculateBalances, simplifyDebts } from '../../src/utils/calculations';
 import { formatCurrency } from '../../src/utils/currency';
 import { formatDate } from '../../src/utils/helpers';
+import { filterExpenses } from '../../src/utils/search';
+import { successTap } from '../../src/utils/feedback';
+import { useGroupSync } from '../../src/hooks/useGroupSync';
 
 type Tab = 'overview' | 'expenses' | 'balances';
 
@@ -16,24 +21,39 @@ export default function GroupScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const theme = useTheme();
-  const { groups, members, expenses, settlements, deleteGroup, markSettlementPaid, upsertSettlement } = useStore();
+  const { groups, members, expenses, settlements, deleteGroup, markSettlementPaid, upsertSettlement, showToast } = useStore();
 
   const [tab, setTab] = useState<Tab>('overview');
   const [menuVisible, setMenuVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterCategory, setFilterCategory] = useState<ExpenseCategory | 'all'>('all');
+
+  useGroupSync(id);
 
   const group = groups[id];
-  if (!group) return null;
 
-  const groupMembers = group.memberIds.map(mid => members[mid]).filter(Boolean);
-  const groupExpenses = Object.values(expenses)
-    .filter(e => e.groupId === id)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const groupMembers = (group?.memberIds ?? []).map(mid => members[mid]).filter(Boolean);
+  const groupExpenses = useMemo(
+    () =>
+      Object.values(expenses)
+        .filter(e => e.groupId === id)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [id, Object.values(expenses).map(e => `${e.id}:${e.description}:${e.category}`).join('|')]
+  );
+
+  const visibleExpenses = useMemo(
+    () => filterExpenses(groupExpenses, searchQuery, filterCategory),
+    [groupExpenses, searchQuery, filterCategory]
+  );
+
+  if (!group) return null;
 
   const balances = calculateBalances(groupMembers, groupExpenses);
   const myId = group.memberIds[0];
   const myBalance = myId ? (balances[myId] ?? 0) : 0;
 
-  const settlementsCalc = calculateSettlements(balances);
+  const settlementsCalc = simplifyDebts(balances);
   const groupSettlements = Object.values(settlements).filter(s => s.groupId === id);
 
   const handleDeleteGroup = () => {
@@ -142,13 +162,42 @@ export default function GroupScreen() {
         {/* EXPENSES */}
         {tab === 'expenses' && (
           <View>
-            {groupExpenses.length === 0 ? (
+            <View style={[styles.searchRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Search size={16} color={theme.textSecondary} strokeWidth={2} />
+              <TextInput
+                style={[styles.searchInput, { color: theme.text }]}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Search expenses"
+                placeholderTextColor={theme.textSecondary}
+              />
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
+              <TouchableOpacity
+                style={[styles.filterChip, { backgroundColor: filterCategory === 'all' ? theme.lightGreen : theme.surface, borderColor: filterCategory === 'all' ? theme.primary : theme.border }]}
+                onPress={() => setFilterCategory('all')}
+              >
+                <Text style={[styles.filterText, { color: filterCategory === 'all' ? theme.primary : theme.textSecondary }]}>All</Text>
+              </TouchableOpacity>
+              {EXPENSE_CATEGORIES.map(c => (
+                <TouchableOpacity
+                  key={c.key}
+                  style={[styles.filterChip, { backgroundColor: filterCategory === c.key ? theme.lightGreen : theme.surface, borderColor: filterCategory === c.key ? theme.primary : theme.border }]}
+                  onPress={() => setFilterCategory(c.key)}
+                >
+                  <Text style={[styles.filterText, { color: filterCategory === c.key ? theme.primary : theme.textSecondary }]}>{c.emoji} {c.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            {visibleExpenses.length === 0 ? (
               <View style={styles.empty}>
                 <Receipt size={40} color={theme.border} strokeWidth={1.5} />
-                <Text style={[styles.emptyTitle, { color: theme.text }]}>No expenses yet</Text>
+                <Text style={[styles.emptyTitle, { color: theme.text }]}>
+                  {groupExpenses.length === 0 ? 'No expenses yet' : 'No matches found'}
+                </Text>
               </View>
             ) : (
-              groupExpenses.map(exp => {
+              visibleExpenses.map(exp => {
                 const payer = members[exp.paidBy];
                 return (
                   <TouchableOpacity
@@ -178,7 +227,7 @@ export default function GroupScreen() {
         {/* BALANCES */}
         {tab === 'balances' && (
           <View>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>Settlements</Text>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Simplified settlement</Text>
             {settlementsCalc.length === 0 ? (
               <View style={styles.settledBox}>
                 <Text style={[styles.settledText, { color: theme.success }]}>✓ All settled up!</Text>
@@ -193,7 +242,7 @@ export default function GroupScreen() {
                   <View key={i} style={[styles.settlementCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                     <View style={styles.settlementTop}>
                       <Text style={[styles.settlementNames, { color: theme.text }]}>
-                        {from?.name ?? 'Unknown'} → {to?.name ?? 'Unknown'}
+                        {from?.name ?? 'Unknown'} pays {to?.name ?? 'Unknown'}
                       </Text>
                       <Text style={[styles.settlementAmount, { color: theme.text }]}>
                         {formatCurrency(s.amountPaise)}
@@ -207,6 +256,8 @@ export default function GroupScreen() {
                         onPress={() => {
                           if (existing) { markSettlementPaid(existing.id); }
                           else { upsertSettlement({ groupId: id, fromMember: s.from, toMember: s.to, amountPaise: s.amountPaise, status: 'paid' }); }
+                          successTap();
+                          showToast('Settlement recorded.');
                         }}
                       >
                         <Text style={[styles.markPaidText, { color: theme.primary }]}>Mark as Paid</Text>
@@ -281,6 +332,11 @@ const styles = StyleSheet.create({
   expenseAmount: { fontFamily: 'Geist_600SemiBold', fontSize: 15 },
   empty: { alignItems: 'center', paddingTop: 64, gap: 12 },
   emptyTitle: { fontFamily: 'Geist_600SemiBold', fontSize: 18 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12 },
+  searchInput: { flex: 1, fontFamily: 'Geist_400Regular', fontSize: 15 },
+  filterRow: { marginHorizontal: -4, marginBottom: 12 },
+  filterChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, marginHorizontal: 4 },
+  filterText: { fontFamily: 'Geist_500Medium', fontSize: 13 },
   settledBox: { padding: 24, alignItems: 'center' },
   settledText: { fontFamily: 'Geist_600SemiBold', fontSize: 16 },
   settlementCard: { borderRadius: 16, borderWidth: 1, padding: 16, marginBottom: 12 },

@@ -1,6 +1,8 @@
-export type SplitType = 'equal' | 'exact' | 'percentage';
-export type GroupType = 'Trip' | 'Friends' | 'Roommates' | 'Couple' | 'Family' | 'Other';
+export type SplitType = 'equal' | 'exact' | 'percentage' | 'shares';
+export type GroupType = 'Trip' | 'Friends' | 'Roommates' | 'Couple' | 'Family' | 'Other' | 'Direct';
 export type ThemePreference = 'system' | 'light' | 'dark';
+export type ExpenseCategory = 'food' | 'stay' | 'transport' | 'shopping' | 'entertainment' | 'bills' | 'other';
+export type RecurringFrequency = 'none' | 'weekly' | 'monthly' | 'yearly';
 
 export interface Group {
   id: string;
@@ -8,12 +10,19 @@ export interface Group {
   type: GroupType;
   memberIds: string[];
   createdAt: string;
+  defaultSplitType?: SplitType;
+  defaultSplitData?: Record<string, number>;
 }
 
 export interface Member {
   id: string;
   name: string;
   groupId: string;
+  phone?: string;
+  email?: string;
+  isAccount?: boolean;
+  /** Server row id when pulled from Supabase (backend sync). Undefined for local-only. */
+  backendId?: string;
 }
 
 export interface ExpenseShare {
@@ -29,7 +38,13 @@ export interface Expense {
   paidBy: string; // memberId
   splitType: SplitType;
   shares: ExpenseShare[];
+  sharesMap?: Record<string, number>; // memberId -> shares, only when splitType === 'shares'
+  category: ExpenseCategory;
+  note?: string;
+  recurring?: RecurringFrequency;
   createdAt: string;
+  /** Server row id when pulled from Supabase (backend sync). Undefined for local-only. */
+  backendId?: string;
 }
 
 export interface Settlement {

@@ -15,6 +15,9 @@ export default function HomeScreen() {
   const { groups, members, expenses, isFirstLaunch } = useStore();
   const myId = 'demo-user-1';
 
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+
   useEffect(() => {
     if (isFirstLaunch) {
       router.replace('/welcome');
@@ -42,7 +45,7 @@ export default function HomeScreen() {
           <View style={styles.header}>
             <View>
               <Text style={[styles.appName, { color: theme.text }]}>Splitz</Text>
-              <Text style={[styles.greeting, { color: theme.textSecondary }]}>Manage your expenses</Text>
+              <Text style={[styles.greeting, { color: theme.textSecondary }]}>{greeting}</Text>
             </View>
             <View style={styles.headerRight}>
               <TouchableOpacity
@@ -61,6 +64,26 @@ export default function HomeScreen() {
               {totalBalance >= 0 ? 'You are owed' : 'You owe'}
             </Text>
           </View>
+
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Quick Split</Text>
+        </View>
+        <View style={styles.quickRow}>
+          <TouchableOpacity
+            style={[styles.quickBtn, { backgroundColor: theme.primary }]}
+            onPress={() => router.push('/split/new')}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.quickBtnText}>With a friend</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.quickBtnOutline, { borderColor: theme.border, backgroundColor: theme.surface }]}
+            onPress={() => router.push('/groups/create')}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.quickBtnOutlineText, { color: theme.text }]}>Create Group</Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Recent Groups</Text>
@@ -166,6 +189,11 @@ const styles = StyleSheet.create({
     fontFamily: 'Geist_600SemiBold',
     fontSize: 18,
   },
+  quickRow: { flexDirection: 'row', gap: 12, marginBottom: 32 },
+  quickBtn: { flex: 1, height: 52, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  quickBtnText: { color: '#fff', fontFamily: 'Geist_600SemiBold', fontSize: 15 },
+  quickBtnOutline: { flex: 1, height: 52, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  quickBtnOutlineText: { fontFamily: 'Geist_600SemiBold', fontSize: 15 },
   empty: {
     padding: 24,
     alignItems: 'center',

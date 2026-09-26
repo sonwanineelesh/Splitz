@@ -6,6 +6,7 @@ import { ArrowLeft, Trash2 } from 'lucide-react-native';
 import { useStore } from '../../../../src/store/useStore';
 import { useTheme } from '../../../../src/hooks/useTheme';
 import { Avatar } from '../../../../src/components/Avatar';
+import { CATEGORY_MAP } from '../../../../src/constants/categories';
 import { formatCurrency } from '../../../../src/utils/currency';
 import { formatDate } from '../../../../src/utils/helpers';
 
@@ -19,6 +20,7 @@ export default function ExpenseDetailScreen() {
   if (!expense) return null;
 
   const payer = members[expense.paidBy];
+  const cat = CATEGORY_MAP[expense.category ?? 'other'];
 
   const handleDelete = () => {
     Alert.alert(
@@ -47,11 +49,17 @@ export default function ExpenseDetailScreen() {
         <Text style={[styles.expenseName, { color: theme.text }]}>{expense.description}</Text>
         <Text style={[styles.amount, { color: theme.text }]}>{formatCurrency(expense.amountPaise)}</Text>
         <Text style={[styles.meta, { color: theme.textSecondary }]}>
-          Paid by {payer?.name ?? 'Unknown'} · {formatDate(expense.createdAt)}
+          {cat.emoji} {cat.label} · Paid by {payer?.name ?? 'Unknown'} · {formatDate(expense.createdAt)}
         </Text>
         <Text style={[styles.splitType, { color: theme.textSecondary }]}>
           Split: {expense.splitType.charAt(0).toUpperCase() + expense.splitType.slice(1)}
+          {expense.recurring && expense.recurring !== 'none'
+            ? ` · Recurring: ${expense.recurring.charAt(0).toUpperCase() + expense.recurring.slice(1)}`
+            : ''}
         </Text>
+        {expense.note ? (
+          <Text style={[styles.note, { color: theme.textSecondary }]}>Note: {expense.note}</Text>
+        ) : null}
 
         <View style={[styles.divider, { backgroundColor: theme.border }]} />
 
@@ -83,6 +91,7 @@ const styles = StyleSheet.create({
   amount: { fontFamily: 'Geist_600SemiBold', fontSize: 40, marginBottom: 8 },
   meta: { fontFamily: 'Geist_400Regular', fontSize: 14, marginBottom: 4 },
   splitType: { fontFamily: 'Geist_400Regular', fontSize: 14 },
+  note: { fontFamily: 'Geist_400Regular', fontSize: 14, marginTop: 4 },
   divider: { height: 1, marginVertical: 24 },
   sectionTitle: { fontFamily: 'Geist_600SemiBold', fontSize: 16, marginBottom: 12 },
   shareRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1 },

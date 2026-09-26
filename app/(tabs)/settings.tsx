@@ -4,13 +4,25 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../src/hooks/useTheme';
 import { useStore } from '../../src/store/useStore';
 import { Settings as SettingsType } from '../../src/types';
-import { Moon, Sun, Smartphone, Trash2 } from 'lucide-react-native';
+import { Moon, Sun, Smartphone, Trash2, RefreshCw } from 'lucide-react-native';
+import { isBackendEnabled } from '../../src/services/supabase';
+import { pullAllGroups } from '../../src/services/sync';
 
 type ThemeOption = SettingsType['theme'];
 
 export default function SettingsScreen() {
   const theme = useTheme();
-  const { settings, setTheme, clearAllData, clearDemoData } = useStore();
+  const { settings, setTheme, clearAllData, clearDemoData, showToast } = useStore();
+  const backendOn = isBackendEnabled();
+
+  const handleSyncNow = async () => {
+    try {
+      const n = await pullAllGroups();
+      showToast(n > 0 ? `Synced ${n} group${n === 1 ? '' : 's'}.` : 'Nothing to sync.');
+    } catch {
+      showToast("Couldn't sync. Please try again.");
+    }
+  };
 
   const themeOptions: { key: ThemeOption; label: string; icon: React.ReactNode }[] = [
     { key: 'light', label: 'Light', icon: <Sun size={16} color={settings.theme === 'light' ? theme.primary : theme.textSecondary} strokeWidth={1.8} /> },
@@ -89,6 +101,17 @@ export default function SettingsScreen() {
         {/* Data */}
         <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Data</Text>
         <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          {backendOn && (
+            <TouchableOpacity
+              style={[styles.settingRow, { borderBottomColor: theme.border, borderBottomWidth: 1 }]}
+              onPress={handleSyncNow}
+            >
+              <View style={styles.settingLeft}>
+                <RefreshCw size={16} color={theme.primary} strokeWidth={1.8} />
+                <Text style={[styles.settingLabel, { color: theme.text }]}>Sync now</Text>
+              </View>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={[styles.settingRow, { borderBottomColor: theme.border, borderBottomWidth: 1 }]}
             onPress={handleClearDemo}
@@ -117,7 +140,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { padding: 16, paddingBottom: 8 },
   title: { fontFamily: 'Geist_600SemiBold', fontSize: 26 },
-  scroll: { padding: 16, paddingBottom: 40 },
+  scroll: { padding: 16, paddingBottom: 100 },
   sectionTitle: { fontFamily: 'Geist_500Medium', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, marginTop: 24 },
   card: { borderRadius: 16, borderWidth: 1, overflow: 'hidden' },
   settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14 },

@@ -14,7 +14,7 @@ export default function MenuScreen() {
       title: 'All Groups',
       subtitle: 'View and manage your groups',
       icon: <Users size={22} color={theme.primary} strokeWidth={1.8} />,
-      route: '/groups',
+      route: '/(tabs)/groups',
     },
     {
       title: 'Create a Group',

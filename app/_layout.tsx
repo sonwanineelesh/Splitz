@@ -1,13 +1,13 @@
-import { Tabs, Stack } from 'expo-router';
+import { Stack } from 'expo-router';
 import {
   useFonts,
   Geist_400Regular,
   Geist_500Medium,
   Geist_600SemiBold,
 } from '@expo-google-fonts/geist';
-import { Home, Settings, Activity } from 'lucide-react-native';
 import { useTheme } from '../src/hooks/useTheme';
-import { View, StyleSheet } from 'react-native';
+import { View } from 'react-native';
+import { Toast } from '../src/components/Toast';
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -49,11 +49,11 @@ export default function RootLayout() {
         />
         <Stack.Screen
           name="groups/index"
-          options={{ headerTitle: 'All Groups' }}
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="groups/create"
-          options={{ headerTitle: 'Create Group', presentation: 'modal' }}
+          options={{ headerShown: false, presentation: 'modal' }}
         />
         <Stack.Screen
           name="group/[id]"
@@ -69,9 +69,18 @@ export default function RootLayout() {
         />
         <Stack.Screen
           name="group/[id]/members"
-          options={{ headerTitle: 'Manage Members' }}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="split/new"
+          options={{ headerShown: false, presentation: 'modal' }}
+        />
+        <Stack.Screen
+          name="split/[id]"
+          options={{ headerShown: false }}
         />
       </Stack>
+      <Toast />
     </View>
   );
 }

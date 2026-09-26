@@ -6,6 +6,9 @@ import {
 } from '../types';
 import { generateId } from '../utils/helpers';
 import { loadDemoData } from '../utils/demoData';
+import { getNextRecurringDate } from '../utils/calculations';
+import { isExpenseCategory } from '../constants/categories';
+import { mergeRemoteState, RemoteExpense, RemoteMember } from '../utils/remoteMerge';
 
 interface SplitzState {
   groups: Record<string, Group>;
@@ -14,13 +17,17 @@ interface SplitzState {
   settlements: Record<string, Settlement>;
   settings: Settings;
   isFirstLaunch: boolean;
+  toast: string | null;
 
   // Group actions
   addGroup: (name: string, type: GroupType) => string;
   deleteGroup: (groupId: string) => void;
+  setDefaultSplit: (groupId: string, type: SplitType, data?: Record<string, number>) => void;
+  clearDefaultSplit: (groupId: string) => void;
+  createDirectSplit: (friendName: string, myName?: string) => string;
 
   // Member actions
-  addMember: (groupId: string, name: string) => string;
+  addMember: (groupId: string, name: string, opts?: { phone?: string; email?: string }) => string;
   removeMember: (memberId: string) => void;
   renameMember: (memberId: string, name: string) => void;
 
@@ -41,6 +48,17 @@ interface SplitzState {
   clearAllData: () => void;
   clearDemoData: () => void;
   completeFirstLaunch: () => void;
+
+  // Toast (not persisted)
+  showToast: (message: string) => void;
+  hideToast: () => void;
+
+  // Backend sync (pull remote rows into local cache, matched by backendId)
+  applyRemoteState: (
+    groupId: string,
+    remoteMembers: RemoteMember[],
+    remoteExpenses: RemoteExpense[]
+  ) => void;
 }
 
 export const useStore = create<SplitzState>()(
@@ -52,6 +70,7 @@ export const useStore = create<SplitzState>()(
       settlements: {},
       settings: { theme: 'system' },
       isFirstLaunch: true,
+      toast: null,
 
       addGroup: (name, type) => {
         const id = generateId();
@@ -78,18 +97,66 @@ export const useStore = create<SplitzState>()(
         });
       },
 
-      addMember: (groupId, name) => {
-        const id = generateId();
+      setDefaultSplit: (groupId, type, data) => {
+        set((s) => {
+          const g = s.groups[groupId];
+          if (!g) return s;
+          return { groups: { ...s.groups, [groupId]: { ...g, defaultSplitType: type, defaultSplitData: data } } };
+        });
+      },
+
+      clearDefaultSplit: (groupId) => {
+        set((s) => {
+          const g = s.groups[groupId];
+          if (!g) return s;
+          const { defaultSplitType: _t, defaultSplitData: _d, ...rest } = g;
+          void _t; void _d;
+          return { groups: { ...s.groups, [groupId]: rest as Group } };
+        });
+      },
+
+      // Direct Friend Split: implicit 2-member `Direct` group (PRD Sec 39)
+      createDirectSplit: (friendName, myName = 'You') => {
+        const groupId = generateId();
+        const meId = generateId();
+        const friendId = generateId();
+        const now = new Date().toISOString();
         set((s) => ({
-          members: { ...s.members, [id]: { id, name, groupId } },
           groups: {
             ...s.groups,
-            [groupId]: {
-              ...s.groups[groupId],
-              memberIds: [...s.groups[groupId].memberIds, id],
-            },
+            [groupId]: { id: groupId, name: `${myName} ↔ ${friendName}`, type: 'Direct', memberIds: [meId, friendId], createdAt: now },
+          },
+          members: {
+            ...s.members,
+            [meId]: { id: meId, name: myName, groupId: groupId, isAccount: true },
+            [friendId]: { id: friendId, name: friendName, groupId: groupId },
           },
         }));
+        return groupId;
+      },
+
+      addMember: (groupId, name, opts) => {
+        const id = generateId();
+        set((s) => {
+          const group = s.groups[groupId];
+          if (!group) return s;
+          return {
+            members: {
+              ...s.members,
+              [id]: {
+                id,
+                name,
+                groupId,
+                phone: opts?.phone?.trim() ? opts.phone.trim() : undefined,
+                email: opts?.email?.trim() ? opts.email.trim() : undefined,
+              },
+            },
+            groups: {
+              ...s.groups,
+              [groupId]: { ...group, memberIds: [...group.memberIds, id] },
+            },
+          };
+        });
         return id;
       },
 
@@ -123,22 +190,41 @@ export const useStore = create<SplitzState>()(
 
       addExpense: (expense) => {
         const id = generateId();
+        const now = new Date().toISOString();
+        const category = isExpenseCategory(expense.category) ? expense.category : 'other';
+        const note = expense.note?.trim().slice(0, 280) || undefined;
+        const recurring = expense.recurring ?? 'none';
+        const main: Expense = { ...expense, id, createdAt: now, category, note, recurring };
         set((s) => ({
-          expenses: {
-            ...s.expenses,
-            [id]: { ...expense, id, createdAt: new Date().toISOString() },
-          },
+          expenses: { ...s.expenses, [id]: main },
         }));
+        // V1 recurring: create the next instance automatically (non-recurring child to avoid chains)
+        if (recurring !== 'none') {
+          const childId = generateId();
+          const child: Expense = {
+            ...main,
+            id: childId,
+            createdAt: getNextRecurringDate(now, recurring),
+            recurring: 'none',
+          };
+          set((s) => ({ expenses: { ...s.expenses, [childId]: child } }));
+        }
         return id;
       },
 
       updateExpense: (id, expense) => {
-        set((s) => ({
-          expenses: {
-            ...s.expenses,
-            [id]: { ...expense, id, createdAt: s.expenses[id]?.createdAt ?? new Date().toISOString() },
-          },
-        }));
+        set((s) => {
+          const prev = s.expenses[id];
+          if (!prev) return s;
+          const category = isExpenseCategory(expense.category) ? expense.category : 'other';
+          const note = expense.note?.trim().slice(0, 280) || undefined;
+          return {
+            expenses: {
+              ...s.expenses,
+              [id]: { ...expense, id, createdAt: prev.createdAt, category, note },
+            },
+          };
+        });
       },
 
       deleteExpense: (id) => {
@@ -210,10 +296,51 @@ export const useStore = create<SplitzState>()(
       completeFirstLaunch: () => {
         set({ isFirstLaunch: false });
       },
+
+      showToast: (message) => {
+        set({ toast: message });
+        setTimeout(() => {
+          if (get().toast === message) set({ toast: null });
+        }, 2500);
+      },
+
+      hideToast: () => {
+        set({ toast: null });
+      },
+
+      applyRemoteState: (groupId, remoteMembers, remoteExpenses) => {
+        set((s) => mergeRemoteState(groupId, s.members, s.expenses, remoteMembers, remoteExpenses));
+      },
     }),
     {
       name: 'splitz-v1',
+      version: 2,
       storage: createJSONStorage(() => AsyncStorage),
+      // Toast is UI-only — never persist it.
+      partialize: (s) => {
+        const { toast: _t, ...rest } = s;
+        void _t;
+        return rest;
+      },
+      // Backfill pre-v2 records with new PRD Sec 5 fields.
+      migrate: (persisted: unknown) => {
+        const s = persisted as SplitzState;
+        if (!s || typeof s !== 'object') return persisted as never;
+        const expenses = { ...(s.expenses ?? {}) };
+        Object.values(expenses).forEach((e) => {
+          const ex = e as Expense;
+          if (!isExpenseCategory((ex as { category?: unknown }).category)) {
+            (ex as { category?: unknown }).category = 'other';
+          }
+          if (!ex.recurring) ex.recurring = 'none';
+        });
+        return { ...s, expenses } as never;
+      },
     }
   )
 );
+
+export const hasMemberExpenses = (memberId: string, expenses: Record<string, Expense>): boolean =>
+  Object.values(expenses).some(
+    (e) => e.paidBy === memberId || e.shares.some((sh) => sh.memberId === memberId)
+  );
