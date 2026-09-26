@@ -1,8 +1,11 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import { Animated, Platform, StyleSheet, Text, View } from 'react-native';
 import { CheckCircle2 } from 'lucide-react-native';
 import { useStore } from '../store/useStore';
 import { useTheme } from '../hooks/useTheme';
+
+// Web has no native animated module — fall back to the JS driver there only.
+const useNativeDriver = Platform.OS !== 'web';
 
 // Global lightweight toast (design Sec 28). Shown via `showToast()` from the
 // store; auto-dismisses. Rendered once in the root layout.
@@ -13,9 +16,9 @@ export const Toast = () => {
 
   useEffect(() => {
     if (message) {
-      Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+      Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver }).start();
     } else {
-      Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }).start();
+      Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver }).start();
     }
   }, [message, opacity]);
 

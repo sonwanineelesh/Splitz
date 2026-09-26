@@ -99,6 +99,16 @@
 
 ## 2. Daily Log (newest first)
 
+### 2026-09-26 — Dashboard insights + dynamic greeting (user-approved plan)
+- Did:
+  - Greeting fix (direct request): new `utils/greeting.ts` — daypart (morning/afternoon/evening/night), daily-rotating templates, live balance suffix (`you're owed ₹X` / `₹X to settle` / `all settled up` / `let's split something`); wired into Home; `__tests__/greeting.test.ts` (3 tests).
+  - Dashboard (approved plan A–D, "Approve — build all"): breakdown strip (owed-to-you / you-owe), pending-payments row → first unsettled group, Needs-attention card (largest debt → Balances), This-month spend + top category, Recent-activity teaser (3 latest → detail). All local compute, theme tokens, 16px cards; empty state unchanged.
+  - Verified: `tsc` clean, `jest` 30/30 pass. Hot-reloaded to running Expo Go session.
+  - Web-warning fixes from user-pasted logs: balance card `shadow*` → `boxShadow` (RN 0.86 cross-platform; `elevation` kept for Android), Toast `useNativeDriver` gated to non-web via `Platform.OS`. DevTools/performance lines are dev-mode noise, ignored.
+- Decided: Dashboard order Hero → strip → Quick Split → attention → Recent Groups → This month → Recent activity (less-is-more per design Sec 34; no charts per non-goals).
+- Blocked: Visual sign-off on device.
+- Next: User review → Sec 32 device checklist → Supabase provision.
+
 ### 2026-09-25 — Nav/UX fix + backend wiring (user testing on Expo Go)
 - Did:
   - Rebuilt `(tabs)/_layout.tsx`: standard bottom nav, 4 tabs (Home/Groups/Activity/Settings) with labels, safe-area height; new `(tabs)/groups.tsx` reusing list screen; menu points at the tab.

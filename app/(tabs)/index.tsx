@@ -5,18 +5,18 @@ import { useRouter } from 'expo-router';
 import { Menu, ChevronRight } from 'lucide-react-native';
 import { useStore } from '../../src/store/useStore';
 import { useTheme } from '../../src/hooks/useTheme';
-import { calculateBalances } from '../../src/utils/calculations';
+import { calculateBalances, simplifyDebts } from '../../src/utils/calculations';
 import { formatCurrency } from '../../src/utils/currency';
+import { getGreeting } from '../../src/utils/greeting';
+import { CATEGORY_MAP } from '../../src/constants/categories';
+import { formatDate } from '../../src/utils/helpers';
 
 export default function HomeScreen() {
   const router = useRouter();
   const theme = useTheme();
-  
+
   const { groups, members, expenses, isFirstLaunch } = useStore();
   const myId = 'demo-user-1';
-
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
   useEffect(() => {
     if (isFirstLaunch) {
@@ -35,9 +35,57 @@ export default function HomeScreen() {
     // Fallback logic for demo user balance logic
     const bal = balances[myId] || balances[group.memberIds[0]] || 0;
     totalBalance += bal;
-    
-    return { ...group, myBalance: bal, expenseCount: groupExpenses.length };
+
+    return { ...group, myBalance: bal, expenseCount: groupExpenses.length, debts: simplifyDebts(balances) };
   }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  const greeting = getGreeting(new Date(), totalBalance, activeGroups.length);
+
+  // A. Breakdown: totals owed to you / owed by you + pending settlement count.
+  let totalOwed = 0;
+  let totalOwe = 0;
+  activeGroups.forEach(g => {
+    if (g.myBalance > 0) totalOwed += g.myBalance;
+    else if (g.myBalance < 0) totalOwe += -g.myBalance;
+  });
+  const allDebts = activeGroups.flatMap(g =>
+    g.debts.map(d => ({ ...d, groupId: g.id, groupName: g.name }))
+  );
+  const pendingCount = allDebts.length;
+  const firstUnsettledId = activeGroups.find(g => g.debts.length > 0)?.id ?? null;
+  interface Attention { fromName: string; toName: string; amount: number; groupId: string; groupName: string }
+  const attention = allDebts.reduce<Attention | null>(
+    (best, d) =>
+      !best || d.amountPaise > best.amount
+        ? {
+            fromName: members[d.from]?.name ?? 'Someone',
+            toName: members[d.to]?.name ?? 'someone',
+            amount: d.amountPaise,
+            groupId: d.groupId,
+            groupName: d.groupName,
+          }
+        : best,
+    null
+  );
+
+  // C. This month: spend total + top category.
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
+  const monthExpenses = Object.values(expenses).filter(e => new Date(e.createdAt).getTime() >= monthStart);
+  const monthSpent = monthExpenses.reduce((acc, e) => acc + e.amountPaise, 0);
+  const spendByCat: Record<string, number> = {};
+  monthExpenses.forEach(e => {
+    const c = e.category ?? 'other';
+    spendByCat[c] = (spendByCat[c] ?? 0) + e.amountPaise;
+  });
+  let topCat: string | null = null;
+  Object.entries(spendByCat).forEach(([c, v]) => {
+    if (!topCat || v > spendByCat[topCat]) topCat = c;
+  });
+
+  // D. Recent activity across all groups.
+  const recentActivity = Object.values(expenses)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 3);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
@@ -65,6 +113,31 @@ export default function HomeScreen() {
             </Text>
           </View>
 
+        {activeGroups.length > 0 && (
+          <View style={styles.statsRow}>
+            <View style={[styles.statBox, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Owed to you</Text>
+              <Text style={[styles.statValue, { color: theme.success }]}>{formatCurrency(totalOwed)}</Text>
+            </View>
+            <View style={[styles.statBox, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>You owe</Text>
+              <Text style={[styles.statValue, { color: theme.error }]}>{formatCurrency(totalOwe)}</Text>
+            </View>
+          </View>
+        )}
+        {pendingCount > 0 && firstUnsettledId && (
+          <TouchableOpacity
+            style={[styles.pendingRow, { backgroundColor: theme.surface, borderColor: theme.border }]}
+            onPress={() => router.push(`/group/${firstUnsettledId}`)}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.pendingText, { color: theme.text }]}>
+              {pendingCount} payment{pendingCount === 1 ? '' : 's'} to settle
+            </Text>
+            <ChevronRight size={16} color={theme.textSecondary} />
+          </TouchableOpacity>
+        )}
+
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Quick Split</Text>
         </View>
@@ -84,6 +157,31 @@ export default function HomeScreen() {
             <Text style={[styles.quickBtnOutlineText, { color: theme.text }]}>Create Group</Text>
           </TouchableOpacity>
         </View>
+
+        {attention && (
+          <View>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>Needs attention</Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.attentionCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
+              onPress={() => router.push(`/group/${attention.groupId}`)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.attentionTop}>
+                <Text style={[styles.attentionNames, { color: theme.text }]}>
+                  {attention.fromName} pays {attention.toName}
+                </Text>
+                <Text style={[styles.attentionAmount, { color: theme.text }]}>
+                  {formatCurrency(attention.amount)}
+                </Text>
+              </View>
+              <Text style={[styles.attentionMeta, { color: theme.textSecondary }]}>
+                {attention.groupName} · tap to settle
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Recent Groups</Text>
@@ -120,6 +218,55 @@ export default function HomeScreen() {
               </View>
             </TouchableOpacity>
           ))
+        )}
+
+        {monthSpent > 0 && (
+          <View>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>This month</Text>
+            </View>
+            <View style={[styles.monthCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <View>
+                <Text style={[styles.monthLabel, { color: theme.textSecondary }]}>Total spent</Text>
+                <Text style={[styles.monthValue, { color: theme.text }]}>{formatCurrency(monthSpent)}</Text>
+              </View>
+              {topCat && (
+                <Text style={[styles.monthTop, { color: theme.textSecondary }]}>
+                  {CATEGORY_MAP[topCat as keyof typeof CATEGORY_MAP].emoji} {CATEGORY_MAP[topCat as keyof typeof CATEGORY_MAP].label}
+                </Text>
+              )}
+            </View>
+          </View>
+        )}
+
+        {recentActivity.length > 0 && (
+          <View>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>Recent activity</Text>
+            </View>
+            {recentActivity.map(exp => {
+              const g = groups[exp.groupId];
+              const payer = members[exp.paidBy];
+              return (
+                <TouchableOpacity
+                  key={exp.id}
+                  style={[styles.activityRow, { borderColor: theme.border }]}
+                  onPress={() => router.push(`/group/${exp.groupId}/expense/${exp.id}`)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.activityLeft}>
+                    <Text style={[styles.activityName, { color: theme.text }]}>{exp.description}</Text>
+                    <Text style={[styles.activityMeta, { color: theme.textSecondary }]}>
+                      {g?.name ?? 'Group'} · Paid by {payer?.name ?? 'Unknown'} · {formatDate(exp.createdAt)}
+                    </Text>
+                  </View>
+                  <Text style={[styles.activityAmount, { color: theme.text }]}>
+                    {formatCurrency(exp.amountPaise)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -160,10 +307,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 24,
     marginBottom: 32,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
+    boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
     elevation: 8,
   },
   balCardLabel: {
@@ -194,6 +338,26 @@ const styles = StyleSheet.create({
   quickBtnText: { color: '#fff', fontFamily: 'Geist_600SemiBold', fontSize: 15 },
   quickBtnOutline: { flex: 1, height: 52, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   quickBtnOutlineText: { fontFamily: 'Geist_600SemiBold', fontSize: 15 },
+  statsRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
+  statBox: { flex: 1, borderRadius: 16, borderWidth: 1, padding: 16 },
+  statLabel: { fontFamily: 'Geist_500Medium', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
+  statValue: { fontFamily: 'Geist_600SemiBold', fontSize: 20 },
+  pendingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 16, borderWidth: 1, padding: 16, marginBottom: 32 },
+  pendingText: { fontFamily: 'Geist_500Medium', fontSize: 15 },
+  attentionCard: { borderRadius: 16, borderWidth: 1, padding: 16, marginBottom: 32 },
+  attentionTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  attentionNames: { fontFamily: 'Geist_500Medium', fontSize: 15, flex: 1 },
+  attentionAmount: { fontFamily: 'Geist_600SemiBold', fontSize: 18 },
+  attentionMeta: { fontFamily: 'Geist_400Regular', fontSize: 13 },
+  monthCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 16, borderWidth: 1, padding: 16, marginBottom: 32 },
+  monthLabel: { fontFamily: 'Geist_500Medium', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
+  monthValue: { fontFamily: 'Geist_600SemiBold', fontSize: 22 },
+  monthTop: { fontFamily: 'Geist_500Medium', fontSize: 14 },
+  activityRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, gap: 12 },
+  activityLeft: { flex: 1 },
+  activityName: { fontFamily: 'Geist_500Medium', fontSize: 15, marginBottom: 2 },
+  activityMeta: { fontFamily: 'Geist_400Regular', fontSize: 13 },
+  activityAmount: { fontFamily: 'Geist_600SemiBold', fontSize: 15 },
   empty: {
     padding: 24,
     alignItems: 'center',
